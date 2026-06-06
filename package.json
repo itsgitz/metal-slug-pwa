@@ -10,6 +10,7 @@
     "test": "bun test"
   },
   "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/adapter-vercel": "^5.0.0",
     "@sveltejs/kit": "^2.0.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
