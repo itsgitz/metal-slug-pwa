@@ -94,11 +94,17 @@ bun test           # run game-core unit tests
 
 ---
 
+## Fixed Issues
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| Browser crash: `TypeError: Cannot read properties of null (reading 'r')` at `onDestroy` | `@sveltejs/vite-plugin-svelte@4` peer-requires vite 5; project uses vite 6. Vite prebundled TWO copies of Svelte runtime — `onDestroy` from one copy read `component_context` (null) owned by the other | Bumped plugin to `^5.0.0` (vite 6 compatible). Verified: single `component_context` across all prebundled chunks |
+
 ## Known Gaps / Next Steps
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| Visual play-through (browser test) | High | Playwright needs `chrome` — install manually to verify game renders and controls work |
+| Visual play-through (browser test) | High | Headless browsers unavailable in env (missing system libs, needs sudo) — verify manually in browser |
 | `svelte-check` type audit | Medium | Run `bun run check` and fix any type errors surfaced by Svelte compiler |
 | Real boss damage (bullet→boss HP) | High | `processCollisions` calls `kill(boss)` instead of decrementing `boss.hp`; needs patch |
 | Terrain entity spawn | Medium | Ground/platform entities not currently added to `world.entities`; terrain collision won't fire |
