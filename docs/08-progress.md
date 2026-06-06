@@ -123,21 +123,48 @@ bun test           # run game-core unit tests
 | Procedural WebAudio SFX (shoot, grenade, explosion, jump, hit, enemy-death, boss-phase, stage-clear, game-over) | ✅ |
 | Mute toggle in HUD (persisted to localStorage) | ✅ |
 
+### Phase 8 — Milestone 3: Pop-in Fix + Game Feel + Audio + Visual Fidelity ✅
+
+| Item | Status |
+|------|--------|
+| **Bugfix:** enemy pop-in — spawn trigger now fires at camera right edge + margin (`spawn.x <= cameraX + halfView + margin`) | ✅ |
+| Real camera halfView passed from scene to game core (`GameInstance.setHalfView`, `scene.getHalfWidth()`, updates on resize) | ✅ |
+| Stage spawn x positions re-tuned (early spawns were inside initial view) | ✅ |
+| Turret aims at player (`aimAngle` render hint, barrel pivot rotation + aimed recoil) | ✅ |
+| Attack telegraphs — turret dome / drone engine / boss pulse before firing (`telegraph` hint, 400ms wind-up) | ✅ |
+| Soldier alert state — holds fire until player within 12u (`alert` hint) | ✅ |
+| Hit-stop — `systems/hitstop.ts`, 3-tick freeze on enemy death (orchestrator-level, loop determinism untouched) | ✅ |
+| Knockback + i-frames on player hit (collision.ts wires invincibility, was dead code before) | ✅ |
+| Camera shake (`renderer.shake`) on explosion / player-hit / boss-phase | ✅ |
+| Red damage flash overlay on player-hit | ✅ |
+| Enemy death animation — 180ms fall/spin before shard burst (renderer dying queue) | ✅ |
+| Procedural chiptune music — `audio/music.ts` lookahead sequencer, per-stage themes, boss intensity variant | ✅ |
+| Audio polish — music/sfx gain split, ±3% pitch detune on rapid SFX, stereo panning by entity x | ✅ |
+| Blob shadows under all characters (pooled, scale/fade with height) | ✅ |
+| Explosion variety per kind — soldier/turret/drone(cyan)/boss(multi-burst)/grenade presets | ✅ |
+| Themed terrain textures — procedural CanvasTexture dirt (jungle) / metal panels (industrial), platform edge highlight | ✅ |
+| Background depth — drifting cloud layer (z=-15) + theme foreground silhouettes (grass/girders, parallax >1) | ✅ |
+| Muzzle smoke puffs + bullet tracer trails | ✅ |
+| Render-layer leak fixes — deepDispose on mesh removal, terrain texture cleanup, drained dying queue | ✅ |
+
+**Total game-core tests: 133 pass / 0 fail**
+
 ## Known Gaps / Next Steps
 
 | Item | Priority | Notes |
 |------|----------|-------|
 | Visual play-through (browser test) | High | Headless browsers unavailable in env — verify manually in browser |
-| Camera world-unit calibration | Low | Camera halfView is hardcoded 10; should derive from frustum + aspect ratio |
 | Swap to `adapter-vercel` for deploy | Low | Switch back before deploying; requires Node ≤22 locally OR Vercel CI handles it |
 | Custom icons (non-placeholder) | Low | Replace solid-color PNGs with actual Metal Slug-style art |
+| Power-ups / weapon variety | Low | Candidate for Milestone 4 (heavy MG, spread shot, health pickup) |
 
 ---
 
 ## Commit History
 
 ```
-(pending) feat(milestone-2): visual upgrade, gameplay fixes, procedural audio
+(pending) feat(milestone-3): pop-in fix, game feel, music, visual fidelity
+4ed4b20 feat(milestone-2): visual upgrade, gameplay fixes, procedural audio
 4391f17 feat(ui+pwa): Phase 5 - game orchestrator, HUD, PWA config, icons
 a708465 feat(render): Phase 4 - Three.js render layer
 c37361e feat(game-core): Phase 3 - entities, stages, validation (TDD)

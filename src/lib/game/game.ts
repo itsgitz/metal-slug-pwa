@@ -7,6 +7,7 @@ import { createActionMap, KeyboardAdapter, consumeEdges } from './systems/input.
 import { processCollisions } from './systems/collision.js';
 import { Scoring } from './systems/scoring.js';
 import { createSpawnManager } from './systems/spawning.js';
+import { createHitStop } from './systems/hitstop.js';
 import { createPlayer } from './entities/player.js';
 import { createSoldier, createTurret, createDrone } from './entities/enemies.js';
 import { createBoss } from './entities/boss.js';
@@ -27,6 +28,7 @@ export interface GameInstance {
   getActions(): ActionMap;
   getEntities(): Entity[];
   getCameraX(): number;
+  setHalfView(n: number): void;
   onResize(): void;
   subscribe(listener: GameEventListener): () => void;
 }
@@ -37,9 +39,16 @@ export function createGame(
 ): GameInstance {
   let entities: Entity[] = [];
   let cameraX = 0;
+  let halfView = 10;
   const actions = createActionMap();
   const kb = new KeyboardAdapter(actions);
   const bus = createEventBus();
+  const hitStop = createHitStop();
+
+  // hit-stop: freeze on enemy/boss death
+  bus.subscribe((event) => {
+    if (event.type === 'enemy-death') hitStop.freeze(3);
+  });
 
   let scoring = new Scoring(3);
   let stageIndex = 0;
@@ -53,6 +62,9 @@ export function createGame(
 
   const loop = createLoop({
     onUpdate(dt: number, world: World): void {
+      // hit-stop: skip entity updates on frozen frames (render still runs)
+      if (hitStop.tick()) return;
+
       // update all entities
       for (const ent of entities) {
         if (ent.alive) ent.update(dt, world);
@@ -121,7 +133,6 @@ export function createGame(
       const livePlayer = entities.find(e => e.type === 'player' && e.alive) as any;
       if (livePlayer) {
         const dir = livePlayer.facingRight ? 1 : -1;
-        const halfView = 10;
         const target = bossLocked
           ? bossLockX
           : Math.max(stage.cameraMinX + halfView, Math.min(stage.cameraMaxX - halfView, livePlayer.x + dir * 3));
@@ -171,7 +182,7 @@ export function createGame(
     bossLockX = 0;
     bossSpawned = false;
     lastBossPhase = 0;
-    cameraX = stage.cameraMinX + 10;
+    cameraX = stage.cameraMinX + halfView;
 
     // spawn terrain entities
     for (const seg of stage.ground) entities.push(createGround(seg));
@@ -180,6 +191,8 @@ export function createGame(
     entities.push(createPlayer(5, 1));
 
     spawnMgr = createSpawnManager(stage.spawns, {
+      halfView,
+      margin: 2,
       onSpawn(entry) {
         for (let i = 0; i < entry.count; i++) {
           const offsetX = i * 2;
@@ -243,6 +256,7 @@ export function createGame(
     getActions: () => actions,
     getEntities: () => entities,
     getCameraX: () => cameraX,
+    setHalfView(n: number): void { halfView = n; },
     onResize(): void { /* handled by scene resize */ },
     subscribe: (listener) => bus.subscribe(listener),
   };

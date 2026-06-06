@@ -38,12 +38,12 @@ export function createGrenade(x: number, y: number, vx: number, vy: number): Gre
         this.exploded = true;
         this.alive = false;
 
-        world.emit({ type: 'explosion', x: this.x + this.w / 2, y: this.y + this.h / 2 });
+        world.emit({ type: 'explosion', x: this.x + this.w / 2, y: this.y + this.h / 2, kind: 'grenade' });
         for (const ent of world.entities) {
           if (!ent.alive) continue;
           if (ent.type === 'enemy-soldier' || ent.type === 'enemy-turret' || ent.type === 'enemy-drone') {
             if (inSplashRadius(this, ent, SPLASH_RADIUS)) {
-              world.emit({ type: 'enemy-death', x: ent.x + ent.w / 2, y: ent.y + ent.h / 2 });
+              world.emit({ type: 'enemy-death', x: ent.x + ent.w / 2, y: ent.y + ent.h / 2, kind: ent.type.replace('enemy-', '') });
               world.kill(ent);
             }
           }
@@ -52,7 +52,7 @@ export function createGrenade(x: number, y: number, vx: number, vy: number): Gre
               const boss = ent as Entity & { hp: number };
               boss.hp -= GRENADE_DAMAGE;
               if (boss.hp <= 0) {
-                world.emit({ type: 'enemy-death', x: boss.x + boss.w / 2, y: boss.y + boss.h / 2 });
+                world.emit({ type: 'enemy-death', x: boss.x + boss.w / 2, y: boss.y + boss.h / 2, kind: 'boss' });
                 world.kill(boss);
               }
             }

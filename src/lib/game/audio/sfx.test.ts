@@ -53,6 +53,11 @@ function makeMockContext() {
       nodes.push({ type: 'source', node: s });
       return s;
     },
+    createStereoPanner() {
+      const p = { pan: { value: 0, setValueAtTime: () => {} }, connect: () => {} };
+      nodes.push({ type: 'panner', node: p });
+      return p;
+    },
     resume: () => Promise.resolve(),
     close: () => Promise.resolve(),
   };
@@ -104,5 +109,48 @@ describe('createAudioEngine()', () => {
     audio.resume(); // init ctx
     audio.dispose();
     expect(closed).toBe(true);
+  });
+
+  test('positioned event creates stereo panner', () => {
+    const { ctx, nodes } = makeMockContext();
+    const audio = createAudioEngine(() => ctx);
+    audio.setCameraX(0);
+    audio.play({ type: 'shoot', x: 10, y: 0 });
+    const panner = nodes.find(n => n.type === 'panner');
+    expect(panner).toBeDefined();
+  });
+
+  test('panner pan value reflects x relative to camera', () => {
+    const { ctx, nodes } = makeMockContext();
+    const audio = createAudioEngine(() => ctx);
+    audio.setCameraX(0);
+    audio.play({ type: 'shoot', x: 9, y: 0 }); // 9/18 = 0.5
+    const panner = nodes.find(n => n.type === 'panner');
+    expect(panner.node.pan.value).toBeCloseTo(0.5, 1);
+  });
+
+  test('pan clamped to [-1, 1]', () => {
+    const { ctx, nodes } = makeMockContext();
+    const audio = createAudioEngine(() => ctx);
+    audio.setCameraX(0);
+    audio.play({ type: 'shoot', x: 1000, y: 0 });
+    const panner = nodes.find(n => n.type === 'panner');
+    expect(panner.node.pan.value).toBe(1);
+  });
+
+  test('unpositioned event (jump) creates no panner', () => {
+    const { ctx, nodes } = makeMockContext();
+    const audio = createAudioEngine(() => ctx);
+    audio.play({ type: 'jump' });
+    const panner = nodes.find(n => n.type === 'panner');
+    expect(panner).toBeUndefined();
+  });
+
+  test('startMusic before ctx init does not throw, starts after init', () => {
+    const { ctx } = makeMockContext();
+    const audio = createAudioEngine(() => ctx);
+    expect(() => audio.startMusic('jungle')).not.toThrow();
+    audio.stopMusic();
+    audio.dispose();
   });
 });

@@ -1,6 +1,6 @@
 import { test, expect, describe } from 'bun:test';
 import { createPlayer, damagePlayer, PLAYER_MOVE_SPEED, PLAYER_JUMP_FORCE } from './player.js';
-import { createSoldier, createTurret, createDrone } from './enemies.js';
+import { createSoldier, createTurret, createDrone, TELEGRAPH_MS } from './enemies.js';
 import { createBullet } from './bullet.js';
 import { createGrenade, GRENADE_SPLASH_RADIUS } from './grenade.js';
 import { createActionMap } from '../systems/input.js';
@@ -191,5 +191,83 @@ describe('drone', () => {
     const world = makeWorld([d]);
     d.update(500, world);
     expect(d.x).not.toBe(5);
+  });
+});
+
+describe('soldier alert state', () => {
+  test('out of alertRange does not fire', () => {
+    const s = createSoldier(10, 0, 3);
+    const player = { id: 1, type: 'player' as const, x: 100, y: 0, vx: 0, vy: 0, w: 1, h: 2, alive: true, mesh: null, update: () => {} };
+    const world = makeWorld([s, player]);
+    // run 3 full fire cycles — player is far away
+    s.update(2000, world);
+    s.update(2000, world);
+    s.update(2000, world);
+    const bullets = world.entities.filter(e => e.type === 'bullet-enemy');
+    expect(bullets.length).toBe(0);
+  });
+
+  test('in alertRange fires', () => {
+    const s = createSoldier(10, 0, 3);
+    const player = { id: 1, type: 'player' as const, x: 15, y: 0, vx: 0, vy: 0, w: 1, h: 2, alive: true, mesh: null, update: () => {} };
+    const world = makeWorld([s, player]);
+    s.update(2100, world); // past one full fire cycle
+    const bullets = world.entities.filter(e => e.type === 'bullet-enemy');
+    expect(bullets.length).toBeGreaterThan(0);
+  });
+
+  test('alert flag reflects player proximity', () => {
+    const s = createSoldier(10, 0, 3);
+    const farPlayer = { id: 1, type: 'player' as const, x: 100, y: 0, vx: 0, vy: 0, w: 1, h: 2, alive: true, mesh: null, update: () => {} };
+    const world = makeWorld([s, farPlayer]);
+    s.update(16, world);
+    expect(s.alert).toBe(false);
+
+    farPlayer.x = 15; // move in range
+    s.update(16, world);
+    expect(s.alert).toBe(true);
+  });
+});
+
+describe('turret aimAngle + telegraph', () => {
+  test('aimAngle tracks player direction', () => {
+    const t = createTurret(0, 0);
+    const player = { id: 1, type: 'player' as const, x: 10, y: 0, vx: 0, vy: 0, w: 1, h: 2, alive: true, mesh: null, update: () => {} };
+    const world = makeWorld([t, player]);
+    t.update(16, world);
+    // player is to the right, aimAngle should be near 0 (pointing right)
+    expect(t.aimAngle).toBeDefined();
+    expect(Math.abs(t.aimAngle! - Math.atan2(-0.8, 10))).toBeLessThan(0.1);
+  });
+
+  test('telegraph true during wind-up window', () => {
+    const t = createTurret(0, 0);
+    const world = makeWorld([t]);
+    // run to just inside telegraph window
+    t.update(1500 - TELEGRAPH_MS + 1, world);
+    expect(t.telegraph).toBe(true);
+  });
+
+  test('telegraph false after firing', () => {
+    const t = createTurret(0, 0);
+    const world = makeWorld([t]);
+    t.update(1600, world); // past full cycle
+    expect(t.telegraph).toBe(false);
+  });
+});
+
+describe('drone telegraph', () => {
+  test('telegraph true during wind-up', () => {
+    const d = createDrone(0, 0, 6);
+    const world = makeWorld([d]);
+    d.update(1800 - TELEGRAPH_MS + 1, world);
+    expect(d.telegraph).toBe(true);
+  });
+
+  test('telegraph false after firing', () => {
+    const d = createDrone(0, 0, 6);
+    const world = makeWorld([d]);
+    d.update(1900, world); // past full cycle
+    expect(d.telegraph).toBe(false);
   });
 });

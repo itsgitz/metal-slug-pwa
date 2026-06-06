@@ -1,6 +1,8 @@
 import type { Entity, World } from '../types.js';
 import { createBossAI } from '../systems/boss-ai.js';
 
+const TELEGRAPH_MS = 400;
+
 let nextId = 500;
 
 export interface BossEntity extends Entity {
@@ -26,6 +28,7 @@ export function createBoss(x: number, y: number, hp: number, onStageClear: () =>
     hpMax: hp,
     shootTimer: ai.cadence,
     phase: 1,
+    telegraph: false,
 
     update(dt: number, world: World): void {
       ai.update(this.hp);
@@ -39,10 +42,13 @@ export function createBoss(x: number, y: number, hp: number, onStageClear: () =>
       }
       this.x += this.vx * (dt / 1000);
 
-      // shoot
+      // shoot with telegraph wind-up
       this.shootTimer -= dt;
+      this.telegraph = this.shootTimer > 0 && this.shootTimer <= TELEGRAPH_MS;
+
       if (this.shootTimer <= 0) {
         this.shootTimer = ai.cadence;
+        this.telegraph = false;
         this._firePattern(ai.pattern, world);
       }
     },

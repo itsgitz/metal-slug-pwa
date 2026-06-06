@@ -80,9 +80,12 @@ function animateTurret(
   root: THREE.Object3D,
   parts: AnimatedParts,
   state: AnimState,
-  _dt: number,
+  dt: number,
   local: AnimLocal,
 ): void {
+  // barrel aim toward player
+  parts.barrelPivot.rotation.z = state.aimAngle ?? 0;
+
   // barrel recoil fades out
   if (local.recoil === undefined) local.recoil = 0;
   if ((state.muzzleFlash ?? 0) > 0 && local.recoilTriggered !== 1) {
@@ -91,7 +94,21 @@ function animateTurret(
   }
   if ((state.muzzleFlash ?? 0) <= 0) local.recoilTriggered = 0;
   local.recoil = Math.max(0, local.recoil - 0.01);
-  parts.barrelPivot.position.x = -local.recoil;
+  // recoil shifts barrel along aim direction
+  const recoilX = Math.cos(state.aimAngle ?? 0) * -local.recoil;
+  const recoilY = Math.sin(state.aimAngle ?? 0) * -local.recoil;
+  parts.barrelPivot.position.x = recoilX;
+  parts.barrelPivot.position.y = recoilY + 0.8;
+
+  // telegraph pulse — dome glows orange before firing
+  const domeMat = (parts.dome as THREE.Mesh).material as THREE.MeshLambertMaterial;
+  if (state.telegraph) {
+    local.telegraphT = (local.telegraphT ?? 0) + dt * 0.015;
+    domeMat.emissiveIntensity = 0.3 + 0.4 * Math.abs(Math.sin(local.telegraphT * 8));
+  } else {
+    domeMat.emissiveIntensity = 0;
+    local.telegraphT = 0;
+  }
 }
 
 export function createTurretMesh(): THREE.Group {
@@ -105,11 +122,11 @@ export function createTurretMesh(): THREE.Group {
 
   const dome = new THREE.Mesh(
     new THREE.CylinderGeometry(0.3, 0.5, 0.5, 8),
-    new THREE.MeshLambertMaterial({ color: 0x445566 }),
+    new THREE.MeshLambertMaterial({ color: 0x445566, emissive: 0xff4400, emissiveIntensity: 0 }),
   );
   dome.position.set(0, 0.75, 0);
 
-  // barrel in a pivot group for recoil
+  // barrel in a pivot group for recoil + aim rotation
   const barrelPivot = new THREE.Group();
   barrelPivot.position.set(0, 0.8, 0);
   const barrel = new THREE.Mesh(
@@ -122,7 +139,7 @@ export function createTurretMesh(): THREE.Group {
   group.add(base, dome, barrelPivot);
   group.position.z = 15;
 
-  const parts: AnimatedParts = { barrelPivot };
+  const parts: AnimatedParts = { barrelPivot, dome };
   group.userData.parts = parts;
   group.userData.animate = animateTurret as AnimateFn;
   return group;
@@ -146,10 +163,18 @@ function animateDrone(
   const bank = Math.max(-0.25, Math.min(0.25, state.vx * 0.04));
   root.rotation.z = -bank;
 
-  // engine glow pulse
-  const pulse = 0.5 + 0.5 * Math.sin(local.rotorT * 3);
-  const eng = (parts.engineL as THREE.Mesh).material as THREE.MeshLambertMaterial;
-  eng.emissiveIntensity = 0.4 + pulse * 0.5;
+  // engine glow — rapid intense pulse when telegraphing, normal otherwise
+  const engL = (parts.engineL as THREE.Mesh).material as THREE.MeshLambertMaterial;
+  const engR = (parts.engineR as THREE.Mesh).material as THREE.MeshLambertMaterial;
+  if (state.telegraph) {
+    const rapidPulse = 0.5 + 0.5 * Math.abs(Math.sin(local.rotorT * 12));
+    engL.emissiveIntensity = 0.8 + rapidPulse * 0.5;
+    engR.emissiveIntensity = 0.8 + rapidPulse * 0.5;
+  } else {
+    const pulse = 0.5 + 0.5 * Math.sin(local.rotorT * 3);
+    engL.emissiveIntensity = 0.4 + pulse * 0.5;
+    engR.emissiveIntensity = 0.4 + pulse * 0.5;
+  }
 }
 
 export function createDroneMesh(): THREE.Group {

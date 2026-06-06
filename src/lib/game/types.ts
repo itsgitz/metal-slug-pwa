@@ -31,6 +31,9 @@ export interface Entity {
   phase?: number;
   invincible?: boolean;
   terrainKind?: 'ground' | 'platform';
+  aimAngle?: number;
+  telegraph?: boolean;
+  alert?: boolean;
 }
 
 export interface ActionMap {

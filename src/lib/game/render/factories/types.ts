@@ -13,6 +13,9 @@ export interface AnimState {
   phase?: number;
   invincible?: boolean;
   tMs: number;
+  aimAngle?: number;
+  telegraph?: boolean;
+  alert?: boolean;
 }
 
 export interface AnimLocal {

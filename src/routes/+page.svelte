@@ -19,6 +19,20 @@
 
   let unsubBus: (() => void) | null = null;
   let muted = false;
+  let flashOpacity = $state(0);
+
+  const STAGE_THEMES = ['jungle', 'industrial'] as const;
+
+  // music + stage theme follow screen state
+  $effect(() => {
+    if (gameState.screen === 'playing') {
+      const theme = STAGE_THEMES[gameState.stageIndex] ?? 'jungle';
+      audio?.startMusic(theme);
+      renderer?.setStageTheme(theme);
+    } else {
+      audio?.stopMusic();
+    }
+  });
 
   function toggleMute() {
     muted = !muted;
@@ -34,12 +48,21 @@
     const g = createGame(container, (entities: Entity[], alpha: number, cameraX: number) => {
       r.syncEntities(entities);
       r.renderFrame(entities, alpha, cameraX);
+      a.setCameraX(cameraX);
     });
+    g.setHalfView(sceneCtx.getHalfWidth());
     // subscribe to event bus: wire FX + audio
     unsubBus?.();
     unsubBus = g.subscribe((event) => {
-      if (event.type === 'explosion') r.triggerFX(event.x, event.y);
-      if (event.type === 'enemy-death') r.triggerFX(event.x, event.y);
+      if (event.type === 'explosion') { r.triggerFX(event.x, event.y, event.kind); r.shake(0.3, 150); }
+      // enemy-death burst handled by renderer's death animation queue
+      if (event.type === 'shoot') r.triggerMuzzleSmoke(event.x, event.y);
+      if (event.type === 'player-hit') {
+        r.shake(0.5, 200);
+        flashOpacity = 0.45;
+        setTimeout(() => { flashOpacity = 0; }, 50);
+      }
+      if (event.type === 'boss-phase') { r.shake(0.8, 350); a.setMusicIntensity('boss'); }
       a.play(event);
     });
     game = g;
@@ -66,6 +89,7 @@
     const handleResize = () => {
       if (!container || !sceneCtx) return;
       sceneCtx.resize(container.clientWidth, container.clientHeight);
+      game?.setHalfView(sceneCtx.getHalfWidth());
     };
     window.addEventListener('resize', handleResize);
 
@@ -98,6 +122,7 @@
 
 <div class="root">
   <div class="canvas-container" bind:this={container}></div>
+  <div class="damage-flash" style:opacity={flashOpacity}></div>
 
   <!-- HUD -->
   {#if gameState.screen === 'playing'}
@@ -217,6 +242,15 @@
     display: block;
     width: 100% !important;
     height: 100% !important;
+  }
+
+  .damage-flash {
+    position: absolute;
+    inset: 0;
+    background: #ff2222;
+    pointer-events: none;
+    z-index: 9;
+    transition: opacity 0.3s ease-out;
   }
 
   /* HUD */

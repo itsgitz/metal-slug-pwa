@@ -1,5 +1,7 @@
 import type { Entity, World } from '../types.js';
 
+type DamageablePlayer = Entity & { invincibleTimer?: number };
+
 export function overlaps(a: Entity, b: Entity): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
@@ -38,6 +40,9 @@ export interface CollisionContext {
 
 export const BULLET_DAMAGE = 10;
 export const GRENADE_DAMAGE = 50;
+export const KNOCKBACK_VX = 8;
+export const KNOCKBACK_VY = 5;
+export const INVINCIBILITY_DURATION = 1500;
 
 const SCORE_TABLE: Partial<Record<Entity['type'], number>> = {
   'enemy-soldier': 100,
@@ -47,6 +52,11 @@ const SCORE_TABLE: Partial<Record<Entity['type'], number>> = {
 };
 
 const triggeredGates = new WeakSet<Entity>();
+
+function deathKind(type: Entity['type']): 'soldier' | 'turret' | 'drone' | 'boss' {
+  if (type === 'boss') return 'boss';
+  return type.replace('enemy-', '') as 'soldier' | 'turret' | 'drone';
+}
 
 export function processCollisions(world: World, ctx: CollisionContext): void {
   const { entities } = world;
@@ -69,7 +79,7 @@ export function processCollisions(world: World, ctx: CollisionContext): void {
         case 'bullet-player|enemy-drone': {
           world.kill(a);
           world.kill(b);
-          world.emit({ type: 'enemy-death', x: b.x + b.w / 2, y: b.y + b.h / 2 });
+          world.emit({ type: 'enemy-death', x: b.x + b.w / 2, y: b.y + b.h / 2, kind: deathKind(b.type) });
           const pts = SCORE_TABLE[b.type as Entity['type']];
           if (pts) ctx.onScoreChange(pts);
           break;
@@ -79,7 +89,7 @@ export function processCollisions(world: World, ctx: CollisionContext): void {
         case 'enemy-drone|bullet-player': {
           world.kill(b);
           world.kill(a);
-          world.emit({ type: 'enemy-death', x: a.x + a.w / 2, y: a.y + a.h / 2 });
+          world.emit({ type: 'enemy-death', x: a.x + a.w / 2, y: a.y + a.h / 2, kind: deathKind(a.type) });
           const pts = SCORE_TABLE[a.type as Entity['type']];
           if (pts) ctx.onScoreChange(pts);
           break;
@@ -92,7 +102,7 @@ export function processCollisions(world: World, ctx: CollisionContext): void {
           boss.hp -= BULLET_DAMAGE;
           if (boss.hp <= 0) {
             world.kill(boss);
-            world.emit({ type: 'enemy-death', x: boss.x + boss.w / 2, y: boss.y + boss.h / 2 });
+            world.emit({ type: 'enemy-death', x: boss.x + boss.w / 2, y: boss.y + boss.h / 2, kind: 'boss' });
             ctx.onScoreChange(SCORE_TABLE['boss']!);
             ctx.onStageClear?.();
           }
@@ -104,7 +114,7 @@ export function processCollisions(world: World, ctx: CollisionContext): void {
           boss.hp -= BULLET_DAMAGE;
           if (boss.hp <= 0) {
             world.kill(boss);
-            world.emit({ type: 'enemy-death', x: boss.x + boss.w / 2, y: boss.y + boss.h / 2 });
+            world.emit({ type: 'enemy-death', x: boss.x + boss.w / 2, y: boss.y + boss.h / 2, kind: 'boss' });
             ctx.onScoreChange(SCORE_TABLE['boss']!);
             ctx.onStageClear?.();
           }
@@ -115,7 +125,16 @@ export function processCollisions(world: World, ctx: CollisionContext): void {
         case 'bullet-enemy|player':
         case 'player|bullet-enemy': {
           const bullet = a.type === 'bullet-enemy' ? a : b;
+          const player = a.type === 'player' ? a : b;
+          if (player.invincible) { world.kill(bullet); break; }
           world.kill(bullet);
+          // knockback — push away from bullet travel direction
+          const kbDir = bullet.vx >= 0 ? -1 : 1;
+          player.vx = kbDir * KNOCKBACK_VX;
+          player.vy = KNOCKBACK_VY;
+          // i-frames
+          player.invincible = true;
+          (player as DamageablePlayer).invincibleTimer = INVINCIBILITY_DURATION;
           world.emit({ type: 'player-hit' });
           const next = ctx.lives - 1;
           ctx.onLivesChange(next);
@@ -132,6 +151,15 @@ export function processCollisions(world: World, ctx: CollisionContext): void {
         case 'enemy-turret|player':
         case 'enemy-drone|player':
         case 'boss|player': {
+          const player = a.type === 'player' ? a : b;
+          const enemy = a.type !== 'player' ? a : b;
+          if (player.invincible) break;
+          // knockback — push player away from enemy
+          const kbDir = player.x < enemy.x ? -1 : 1;
+          player.vx = kbDir * KNOCKBACK_VX;
+          player.vy = KNOCKBACK_VY;
+          player.invincible = true;
+          (player as DamageablePlayer).invincibleTimer = INVINCIBILITY_DURATION;
           world.emit({ type: 'player-hit' });
           const next = ctx.lives - 1;
           ctx.onLivesChange(next);

@@ -43,9 +43,12 @@ export interface EndGate {
   type: 'reach' | 'boss-cleared';
 }
 
+export type StageTheme = 'jungle' | 'industrial';
+
 export interface StageConfig {
   id: number;
   name: string;
+  theme: StageTheme;
   length: number;
   cameraMinX: number;
   cameraMaxX: number;

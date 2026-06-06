@@ -1,10 +1,12 @@
+export type ExplosionKind = 'soldier' | 'turret' | 'drone' | 'boss' | 'grenade';
+
 export type GameEvent =
   | { type: 'shoot'; x: number; y: number }
   | { type: 'grenade-throw'; x: number; y: number }
-  | { type: 'explosion'; x: number; y: number }
+  | { type: 'explosion'; x: number; y: number; kind?: ExplosionKind }
   | { type: 'jump' }
   | { type: 'player-hit' }
-  | { type: 'enemy-death'; x: number; y: number }
+  | { type: 'enemy-death'; x: number; y: number; kind?: ExplosionKind }
   | { type: 'boss-phase'; phase: number }
   | { type: 'stage-clear' }
   | { type: 'game-over' };

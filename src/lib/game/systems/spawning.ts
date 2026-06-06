@@ -2,6 +2,8 @@ import type { SpawnEntry } from '../stages/types.js';
 
 interface SpawnManagerOptions {
   onSpawn(entry: SpawnEntry): void;
+  halfView?: number;
+  margin?: number;
 }
 
 export interface SpawnManager {
@@ -10,13 +12,14 @@ export interface SpawnManager {
 }
 
 export function createSpawnManager(spawns: SpawnEntry[], options: SpawnManagerOptions): SpawnManager {
-  const { onSpawn } = options;
+  const { onSpawn, halfView = 0, margin = 0 } = options;
   const pending = new Set<SpawnEntry>(spawns);
 
   return {
     update(cameraX: number): void {
+      const rightEdge = cameraX + halfView + margin;
       for (const spawn of pending) {
-        if (cameraX >= spawn.x) {
+        if (spawn.x <= rightEdge) {
           onSpawn(spawn);
           pending.delete(spawn);
         }

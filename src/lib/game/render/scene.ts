@@ -7,6 +7,7 @@ export interface SceneContext {
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
   background: Background;
+  getHalfWidth(): number;
   resize(width: number, height: number): void;
   dispose(): void;
 }
@@ -28,8 +29,8 @@ export function createScene(container: HTMLElement): SceneContext {
   scene.background = new THREE.Color(0x0b1428);
 
   const halfH = FRUSTUM_HEIGHT / 2;
-  const halfW = halfH * aspect;
-  const camera = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.1, 100);
+  let currentHalfW = halfH * aspect;
+  const camera = new THREE.OrthographicCamera(-currentHalfW, currentHalfW, halfH, -halfH, 0.1, 100);
   camera.position.set(0, halfH, 50);
 
   // lighting: cool ambient + warm key + hemisphere fill
@@ -51,12 +52,14 @@ export function createScene(container: HTMLElement): SceneContext {
     camera,
     background,
 
+    getHalfWidth(): number { return currentHalfW; },
+
     resize(w: number, h: number): void {
       const asp = w / h;
-      const hw = (FRUSTUM_HEIGHT / 2) * asp;
+      currentHalfW = (FRUSTUM_HEIGHT / 2) * asp;
       const hh = FRUSTUM_HEIGHT / 2;
-      camera.left = -hw;
-      camera.right = hw;
+      camera.left = -currentHalfW;
+      camera.right = currentHalfW;
       camera.top = hh;
       camera.bottom = -hh;
       camera.updateProjectionMatrix();
