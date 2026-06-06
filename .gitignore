@@ -1,5 +1,9 @@
-# dependencies (bun install)
+# dependencies
 node_modules
+
+# SvelteKit
+.svelte-kit
+build
 
 # output
 out
