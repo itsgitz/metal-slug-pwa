@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test';
-import { overlaps, inSplashRadius, resolveTerrainLanding, processCollisions } from './collision.js';
+import { overlaps, inSplashRadius, resolveTerrainLanding, processCollisions, BULLET_DAMAGE } from './collision.js';
 import type { Entity, World } from '../types.js';
 
 function e(x: number, y: number, w = 1, h = 1, type: Entity['type'] = 'player'): Entity {
@@ -7,7 +7,7 @@ function e(x: number, y: number, w = 1, h = 1, type: Entity['type'] = 'player'):
 }
 
 function makeWorld(entities: Entity[]): World {
-  return { entities, actions: { left: false, right: false, jump: false, shoot: false, grenade: false }, spawn: () => {}, kill: (ent) => { ent.alive = false; }, camera: { x: 0 } };
+  return { entities, actions: { left: false, right: false, jump: false, shoot: false, grenade: false }, spawn: () => {}, kill: (ent) => { ent.alive = false; }, emit: () => {}, camera: { x: 0 } };
 }
 
 describe('overlaps()', () => {
@@ -39,13 +39,39 @@ describe('inSplashRadius()', () => {
 });
 
 describe('resolveTerrainLanding()', () => {
-  test('player lands on terrain from above → snaps y, zeroes vy', () => {
-    const player = e(0, 3.5, 1, 2, 'player'); // falling, overlaps terrain
+  test('player falling onto ground → snaps y, zeroes vy, sets onGround', () => {
+    const player = e(0, 0.5, 1, 2, 'player');
     player.vy = -5;
-    const terrain = e(0, 0, 10, 1, 'terrain'); // terrain top at y=1
+    (player as any).onGround = false;
+    const terrain = e(0, 0, 10, 1, 'terrain');
+    terrain.terrainKind = 'ground';
     resolveTerrainLanding(player, terrain);
     expect(player.y).toBe(terrain.y + terrain.h);
     expect(player.vy).toBe(0);
+    expect((player as any).onGround).toBe(true);
+  });
+
+  test('player jumping upward through platform → no snap', () => {
+    const player = e(0, 0, 1, 2, 'player');
+    player.vy = 10; // jumping up
+    (player as any).onGround = false;
+    const platform = e(0, 2, 10, 1, 'terrain');
+    platform.terrainKind = 'platform';
+    resolveTerrainLanding(player, platform);
+    expect(player.vy).toBe(10); // not zeroed
+    expect((player as any).onGround).toBe(false);
+  });
+
+  test('player falling onto platform from above → snaps and sets onGround', () => {
+    const player = e(0, 2.6, 1, 2, 'player');
+    player.vy = -5;
+    (player as any).onGround = false;
+    const platform = e(0, 2, 10, 1, 'terrain');
+    platform.terrainKind = 'platform';
+    resolveTerrainLanding(player, platform);
+    expect(player.y).toBe(platform.y + platform.h);
+    expect(player.vy).toBe(0);
+    expect((player as any).onGround).toBe(true);
   });
 });
 
@@ -87,5 +113,50 @@ describe('processCollisions()', () => {
     processCollisions(world, ctx);
     processCollisions(world, ctx);
     expect(triggers).toBe(1);
+  });
+
+  test('bullet-player + boss → bullet dies, boss hp decrements by BULLET_DAMAGE', () => {
+    const bullet = e(0, 0, 1, 1, 'bullet-player');
+    const boss = e(0, 0, 1, 1, 'boss') as Entity & { hp: number; hpMax: number };
+    boss.hp = 100;
+    boss.hpMax = 100;
+    const world = makeWorld([bullet, boss]);
+    processCollisions(world, { score: 0, lives: 3, onScoreChange: () => {}, onLivesChange: () => {}, onGameOver: () => {} });
+    expect(bullet.alive).toBe(false);
+    expect(boss.alive).toBe(true);
+    expect(boss.hp).toBe(100 - BULLET_DAMAGE);
+  });
+
+  test('boss + bullet-player (reversed order) → same result', () => {
+    const boss = e(0, 0, 1, 1, 'boss') as Entity & { hp: number; hpMax: number };
+    boss.hp = 100;
+    boss.hpMax = 100;
+    const bullet = e(0, 0, 1, 1, 'bullet-player');
+    const world = makeWorld([boss, bullet]);
+    processCollisions(world, { score: 0, lives: 3, onScoreChange: () => {}, onLivesChange: () => {}, onGameOver: () => {} });
+    expect(bullet.alive).toBe(false);
+    expect(boss.alive).toBe(true);
+    expect(boss.hp).toBe(100 - BULLET_DAMAGE);
+  });
+
+  test('bullet-player + boss at low hp → boss dies, score awarded', () => {
+    const bullet = e(0, 0, 1, 1, 'bullet-player');
+    const boss = e(0, 0, 1, 1, 'boss') as Entity & { hp: number; hpMax: number };
+    boss.hp = BULLET_DAMAGE;
+    boss.hpMax = 300;
+    let score = 0;
+    let cleared = false;
+    const world = makeWorld([bullet, boss]);
+    processCollisions(world, {
+      score: 0, lives: 3,
+      onScoreChange: (pts) => { score += pts; },
+      onLivesChange: () => {},
+      onGameOver: () => {},
+      onStageClear: () => { cleared = true; },
+    });
+    expect(bullet.alive).toBe(false);
+    expect(boss.alive).toBe(false);
+    expect(score).toBeGreaterThan(0);
+    expect(cleared).toBe(true);
   });
 });

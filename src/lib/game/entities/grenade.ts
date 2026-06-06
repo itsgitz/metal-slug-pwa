@@ -1,5 +1,5 @@
 import type { Entity } from '../types.js';
-import { inSplashRadius } from '../systems/collision.js';
+import { inSplashRadius, GRENADE_DAMAGE } from '../systems/collision.js';
 
 let nextId = 2000;
 
@@ -38,11 +38,23 @@ export function createGrenade(x: number, y: number, vx: number, vy: number): Gre
         this.exploded = true;
         this.alive = false;
 
+        world.emit({ type: 'explosion', x: this.x + this.w / 2, y: this.y + this.h / 2 });
         for (const ent of world.entities) {
           if (!ent.alive) continue;
-          if (ent.type === 'enemy-soldier' || ent.type === 'enemy-turret' || ent.type === 'enemy-drone' || ent.type === 'boss') {
+          if (ent.type === 'enemy-soldier' || ent.type === 'enemy-turret' || ent.type === 'enemy-drone') {
             if (inSplashRadius(this, ent, SPLASH_RADIUS)) {
+              world.emit({ type: 'enemy-death', x: ent.x + ent.w / 2, y: ent.y + ent.h / 2 });
               world.kill(ent);
+            }
+          }
+          if (ent.type === 'boss') {
+            if (inSplashRadius(this, ent, SPLASH_RADIUS)) {
+              const boss = ent as Entity & { hp: number };
+              boss.hp -= GRENADE_DAMAGE;
+              if (boss.hp <= 0) {
+                world.emit({ type: 'enemy-death', x: boss.x + boss.w / 2, y: boss.y + boss.h / 2 });
+                world.kill(boss);
+              }
             }
           }
         }

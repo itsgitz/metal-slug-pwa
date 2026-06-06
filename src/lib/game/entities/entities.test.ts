@@ -12,6 +12,7 @@ function makeWorld(entities: any[] = []): World {
     actions: createActionMap(),
     spawn(t) { entities.push({ ...t, id: 9999, alive: true, mesh: null, vx: t.vx ?? 0, vy: t.vy ?? 0, w: t.w ?? 1, h: t.h ?? 1, update: () => {} }); },
     kill(e) { e.alive = false; },
+    emit: () => {},
     camera: { x: 0 },
   };
 }
@@ -140,6 +141,15 @@ describe('grenade', () => {
     const world = makeWorld([g, far]);
     g.update(2100, world);
     expect(far.alive).toBe(true);
+  });
+
+  test('grenade near boss decrements hp but does not one-shot at full hp', () => {
+    const g = createGrenade(0, 1, 0, 0);
+    const boss = { id: 999, type: 'boss' as const, x: 0, y: 0, vx: 0, vy: 0, w: 4, h: 3, alive: true, mesh: null, hp: 300, hpMax: 300, update: () => {} };
+    const world = makeWorld([g, boss]);
+    g.update(2100, world);
+    expect(boss.alive).toBe(true);
+    expect(boss.hp).toBeLessThan(300);
   });
 });
 

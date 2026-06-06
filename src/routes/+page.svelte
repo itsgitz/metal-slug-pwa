@@ -4,22 +4,43 @@
   import { createScene } from '$lib/game/render/scene.js';
   import { createRenderer } from '$lib/game/render/renderer.js';
   import { createGame } from '$lib/game/game.js';
+  import { createAudioEngine } from '$lib/game/audio/sfx.js';
   import type { GameInstance } from '$lib/game/game.js';
   import type { SceneContext } from '$lib/game/render/scene.js';
   import type { Renderer } from '$lib/game/render/renderer.js';
+  import type { AudioEngine } from '$lib/game/audio/sfx.js';
   import type { Entity } from '$lib/game/types.js';
 
   let container: HTMLDivElement;
   let game: GameInstance | null = null;
   let sceneCtx: SceneContext | null = null;
   let renderer: Renderer | null = null;
+  let audio: AudioEngine | null = null;
+
+  let unsubBus: (() => void) | null = null;
+  let muted = false;
+
+  function toggleMute() {
+    muted = !muted;
+    audio?.setMuted(muted);
+    localStorage.setItem('sfx-muted', muted ? '1' : '0');
+  }
 
   function startGame() {
     if (!sceneCtx || !renderer) return;
     const r = renderer;
+    const a = audio!;
+    a.resume(); // satisfy autoplay policy on first user gesture
     const g = createGame(container, (entities: Entity[], alpha: number, cameraX: number) => {
       r.syncEntities(entities);
       r.renderFrame(entities, alpha, cameraX);
+    });
+    // subscribe to event bus: wire FX + audio
+    unsubBus?.();
+    unsubBus = g.subscribe((event) => {
+      if (event.type === 'explosion') r.triggerFX(event.x, event.y);
+      if (event.type === 'enemy-death') r.triggerFX(event.x, event.y);
+      a.play(event);
     });
     game = g;
     g.start();
@@ -38,6 +59,9 @@
   onMount(() => {
     sceneCtx = createScene(container);
     renderer = createRenderer(sceneCtx);
+    audio = createAudioEngine();
+    muted = localStorage.getItem('sfx-muted') === '1';
+    audio.setMuted(muted);
 
     const handleResize = () => {
       if (!container || !sceneCtx) return;
@@ -51,7 +75,9 @@
   });
 
   onDestroy(() => {
+    unsubBus?.();
     game?.stop();
+    audio?.dispose();
     renderer?.dispose();
     sceneCtx?.dispose();
   });
@@ -93,6 +119,7 @@
       <div class="hud-right">
         {'♥'.repeat(Math.max(0, gameState.lives))}
         <span class="stage-label">STAGE {gameState.stageIndex + 1}</span>
+        <button class="mute-btn" onclick={toggleMute} title="Toggle sound">{muted ? '🔇' : '🔊'}</button>
       </div>
     </div>
 
@@ -221,6 +248,15 @@
   .stage-label {
     font-size: 11px;
     color: #aaa;
+  }
+
+  .mute-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+    pointer-events: all;
   }
 
   .boss-bar-wrap {

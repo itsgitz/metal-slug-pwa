@@ -87,7 +87,7 @@ bun test           # run game-core unit tests
 ### Phase 6 — Verify ✅
 | Check | Result |
 |-------|--------|
-| `bun test` | ✅ 88/88 pass |
+| `bun test` | ✅ 108/108 pass |
 | `bun run build` | ✅ succeeds |
 | PWA manifest + sw.js generated | ✅ |
 | Preview HTTP 200 on HTML/manifest/icons/sw.js | ✅ |
@@ -100,14 +100,34 @@ bun test           # run game-core unit tests
 |-------|-----------|-----|
 | Browser crash: `TypeError: Cannot read properties of null (reading 'r')` at `onDestroy` | `@sveltejs/vite-plugin-svelte@4` peer-requires vite 5; project uses vite 6. Vite prebundled TWO copies of Svelte runtime — `onDestroy` from one copy read `component_context` (null) owned by the other | Bumped plugin to `^5.0.0` (vite 6 compatible). Verified: single `component_context` across all prebundled chunks |
 
+### Phase 7 — Visual + Gameplay Milestone ✅
+
+| Item | Status |
+|------|--------|
+| Core event bus (`events.ts`, `events.test.ts`) | ✅ |
+| `World.emit` + optional Entity render-hint fields | ✅ |
+| Boss HP fix — bullet/grenade decrement, not instant kill | ✅ |
+| Boss spawn at camera trigger + end-gate | ✅ |
+| Terrain entity factory + spawn in initStage | ✅ |
+| One-way platform landing + `onGround` fix | ✅ |
+| Pit death check + respawn | ✅ |
+| Terrain meshes rendered (ground + platforms) | ✅ |
+| Articulated player mesh (hip/shoulder pivots, walk cycle, facing flip, jump tuck, invincibility blink, muzzle flash) | ✅ |
+| Animated soldier (marching legs), turret (barrel recoil), drone (spinning rotors, engine pulse, banking) | ✅ |
+| Boss animated (tread scroll, cannon recoil, phase emissive pulse) | ✅ |
+| FX fixed: multi-shard burst, `transparent:true`, flash quad, gravity on shards | ✅ |
+| Explosions now actually fire on enemy/boss death (was dead code) | ✅ |
+| Emissive bullets rotated to travel direction | ✅ |
+| Parallax background (mountains + building silhouettes, sky gradient) | ✅ |
+| Lighting overhaul: hemisphere fill + cool ambient + warm key | ✅ |
+| Procedural WebAudio SFX (shoot, grenade, explosion, jump, hit, enemy-death, boss-phase, stage-clear, game-over) | ✅ |
+| Mute toggle in HUD (persisted to localStorage) | ✅ |
+
 ## Known Gaps / Next Steps
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| Visual play-through (browser test) | High | Headless browsers unavailable in env (missing system libs, needs sudo) — verify manually in browser |
-| `svelte-check` type audit | Medium | Run `bun run check` and fix any type errors surfaced by Svelte compiler |
-| Real boss damage (bullet→boss HP) | High | `processCollisions` calls `kill(boss)` instead of decrementing `boss.hp`; needs patch |
-| Terrain entity spawn | Medium | Ground/platform entities not currently added to `world.entities`; terrain collision won't fire |
+| Visual play-through (browser test) | High | Headless browsers unavailable in env — verify manually in browser |
 | Camera world-unit calibration | Low | Camera halfView is hardcoded 10; should derive from frustum + aspect ratio |
 | Swap to `adapter-vercel` for deploy | Low | Switch back before deploying; requires Node ≤22 locally OR Vercel CI handles it |
 | Custom icons (non-placeholder) | Low | Replace solid-color PNGs with actual Metal Slug-style art |
@@ -117,6 +137,7 @@ bun test           # run game-core unit tests
 ## Commit History
 
 ```
+(pending) feat(milestone-2): visual upgrade, gameplay fixes, procedural audio
 4391f17 feat(ui+pwa): Phase 5 - game orchestrator, HUD, PWA config, icons
 a708465 feat(render): Phase 4 - Three.js render layer
 c37361e feat(game-core): Phase 3 - entities, stages, validation (TDD)

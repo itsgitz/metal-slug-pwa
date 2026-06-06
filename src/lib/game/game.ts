@@ -1,5 +1,7 @@
 import type { Entity, World, ActionMap } from './types.js';
 import type { StageConfig } from './stages/types.js';
+import { createEventBus } from './events.js';
+import type { GameEvent, GameEventListener } from './events.js';
 import { createLoop } from './loop.js';
 import { createActionMap, KeyboardAdapter, consumeEdges } from './systems/input.js';
 import { processCollisions } from './systems/collision.js';
@@ -10,6 +12,8 @@ import { createSoldier, createTurret, createDrone } from './entities/enemies.js'
 import { createBoss } from './entities/boss.js';
 import { createBullet } from './entities/bullet.js';
 import { createGrenade } from './entities/grenade.js';
+import { createGround, createPlatform } from './entities/terrain.js';
+import { PIT_DEATH_Y } from './entities/player.js';
 import { gameState, setScreen, addScore, setLives, setBossHp, advanceStage, resetForStage } from './state.svelte.js';
 import { stage1 } from './stages/stage-1.js';
 import { stage2 } from './stages/stage-2.js';
@@ -24,6 +28,7 @@ export interface GameInstance {
   getEntities(): Entity[];
   getCameraX(): number;
   onResize(): void;
+  subscribe(listener: GameEventListener): () => void;
 }
 
 export function createGame(
@@ -34,11 +39,14 @@ export function createGame(
   let cameraX = 0;
   const actions = createActionMap();
   const kb = new KeyboardAdapter(actions);
+  const bus = createEventBus();
 
   let scoring = new Scoring(3);
   let stageIndex = 0;
   let bossLocked = false;
   let bossLockX = 0;
+  let bossSpawned = false;
+  let lastBossPhase = 0;
   let spawnMgr = createSpawnManager([], { onSpawn: () => {} });
   let rafId = 0;
   let lastTime = 0;
@@ -63,19 +71,60 @@ export function createGame(
       // spawning
       spawnMgr.update(cameraX);
 
-      // boss HP sync
-      const boss = entities.find(e => e.type === 'boss' && e.alive) as any;
-      if (boss) setBossHp(boss.hp, boss.hpMax);
+      // boss trigger
+      const stage = STAGES[stageIndex];
+      if (!bossSpawned && cameraX >= stage.bossTrigger.x) {
+        bossSpawned = true;
+        bossLocked = true;
+        bossLockX = stage.bossTrigger.bossSpawnX;
+        entities.push(createBoss(stage.bossTrigger.bossSpawnX, stage.bossTrigger.bossSpawnY, stage.bossHp, () => handleStageClear()));
+        // spawn end-gate entity (collision handler already handles it)
+        entities.push({
+          id: entityIdCounter++,
+          type: 'end-gate',
+          x: stage.endGate.x, y: 0, vx: 0, vy: 0, w: 2, h: 4,
+          alive: true, mesh: null,
+          update() {},
+        });
+      }
 
-      // camera follow
+      // boss HP sync + phase-change events
+      const boss = entities.find(e => e.type === 'boss' && e.alive) as any;
+      if (boss) {
+        setBossHp(boss.hp, boss.hpMax);
+        if (boss.phase !== lastBossPhase) {
+          lastBossPhase = boss.phase;
+          bus.emit({ type: 'boss-phase', phase: boss.phase });
+        }
+      }
+
+      // pit death check
       const player = entities.find(e => e.type === 'player' && e.alive) as any;
-      if (player) {
-        const stage = STAGES[stageIndex];
-        const dir = player.facingRight ? 1 : -1;
+      if (player && player.y < PIT_DEATH_Y) {
+        world.kill(player);
+        const next = scoring.lives - 1;
+        scoring.lives = next;
+        setLives(next);
+        bus.emit({ type: 'player-hit' });
+        if (next <= 0) {
+          loop.transition('game-over');
+          setScreen('game-over');
+          scoring.saveHiScore();
+          bus.emit({ type: 'game-over' });
+        } else {
+          // respawn at stage start
+          entities.push(createPlayer(5, 1));
+        }
+      }
+
+      // camera follow (re-find in case of respawn)
+      const livePlayer = entities.find(e => e.type === 'player' && e.alive) as any;
+      if (livePlayer) {
+        const dir = livePlayer.facingRight ? 1 : -1;
         const halfView = 10;
         const target = bossLocked
           ? bossLockX
-          : Math.max(stage.cameraMinX + halfView, Math.min(stage.cameraMaxX - halfView, player.x + dir * 3));
+          : Math.max(stage.cameraMinX + halfView, Math.min(stage.cameraMaxX - halfView, livePlayer.x + dir * 3));
         cameraX += (target - cameraX) * 0.1;
       }
 
@@ -99,6 +148,7 @@ export function createGame(
       if (ent) entities.push(ent);
     },
     kill(e) { e.alive = false; },
+    emit(event: GameEvent) { bus.emit(event); },
     camera: { get x() { return cameraX; } },
   };
 
@@ -119,7 +169,13 @@ export function createGame(
     entities = [];
     bossLocked = false;
     bossLockX = 0;
+    bossSpawned = false;
+    lastBossPhase = 0;
     cameraX = stage.cameraMinX + 10;
+
+    // spawn terrain entities
+    for (const seg of stage.ground) entities.push(createGround(seg));
+    for (const p of stage.platforms) entities.push(createPlatform(p));
 
     entities.push(createPlayer(5, 1));
 
@@ -188,5 +244,6 @@ export function createGame(
     getEntities: () => entities,
     getCameraX: () => cameraX,
     onResize(): void { /* handled by scene resize */ },
+    subscribe: (listener) => bus.subscribe(listener),
   };
 }

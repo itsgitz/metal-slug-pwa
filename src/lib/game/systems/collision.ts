@@ -12,9 +12,19 @@ export function inSplashRadius(grenade: Entity, target: Entity, radius: number):
   return Math.hypot(cx - tx, cy - ty) <= radius;
 }
 
+const SNAP_TOLERANCE = 0.5;
+
 export function resolveTerrainLanding(player: Entity, terrain: Entity): void {
-  player.y = terrain.y + terrain.h;
+  const isGround = terrain.terrainKind === 'ground';
+  const playerBottom = player.y;
+  const terrainTop = terrain.y + terrain.h;
+
+  // one-way platforms: only land when falling (vy <= 0) and coming from above
+  if (!isGround && (player.vy > 0 || playerBottom < terrainTop - SNAP_TOLERANCE)) return;
+
+  player.y = terrainTop;
   player.vy = 0;
+  player.onGround = true;
 }
 
 export interface CollisionContext {
@@ -26,10 +36,14 @@ export interface CollisionContext {
   onStageClear?(): void;
 }
 
+export const BULLET_DAMAGE = 10;
+export const GRENADE_DAMAGE = 50;
+
 const SCORE_TABLE: Partial<Record<Entity['type'], number>> = {
   'enemy-soldier': 100,
   'enemy-turret': 200,
   'enemy-drone': 150,
+  'boss': 5000,
 };
 
 const triggeredGates = new WeakSet<Entity>();
@@ -49,25 +63,51 @@ export function processCollisions(world: World, ctx: CollisionContext): void {
       const pair = `${a.type}|${b.type}`;
 
       switch (pair) {
-        // player bullet kills enemy
+        // player bullet kills regular enemy
         case 'bullet-player|enemy-soldier':
         case 'bullet-player|enemy-turret':
-        case 'bullet-player|enemy-drone':
-        case 'bullet-player|boss': {
+        case 'bullet-player|enemy-drone': {
           world.kill(a);
           world.kill(b);
+          world.emit({ type: 'enemy-death', x: b.x + b.w / 2, y: b.y + b.h / 2 });
           const pts = SCORE_TABLE[b.type as Entity['type']];
           if (pts) ctx.onScoreChange(pts);
           break;
         }
         case 'enemy-soldier|bullet-player':
         case 'enemy-turret|bullet-player':
-        case 'enemy-drone|bullet-player':
-        case 'boss|bullet-player': {
+        case 'enemy-drone|bullet-player': {
           world.kill(b);
           world.kill(a);
+          world.emit({ type: 'enemy-death', x: a.x + a.w / 2, y: a.y + a.h / 2 });
           const pts = SCORE_TABLE[a.type as Entity['type']];
           if (pts) ctx.onScoreChange(pts);
+          break;
+        }
+
+        // player bullet hits boss — decrement HP
+        case 'bullet-player|boss': {
+          world.kill(a);
+          const boss = b as Entity & { hp: number };
+          boss.hp -= BULLET_DAMAGE;
+          if (boss.hp <= 0) {
+            world.kill(boss);
+            world.emit({ type: 'enemy-death', x: boss.x + boss.w / 2, y: boss.y + boss.h / 2 });
+            ctx.onScoreChange(SCORE_TABLE['boss']!);
+            ctx.onStageClear?.();
+          }
+          break;
+        }
+        case 'boss|bullet-player': {
+          world.kill(b);
+          const boss = a as Entity & { hp: number };
+          boss.hp -= BULLET_DAMAGE;
+          if (boss.hp <= 0) {
+            world.kill(boss);
+            world.emit({ type: 'enemy-death', x: boss.x + boss.w / 2, y: boss.y + boss.h / 2 });
+            ctx.onScoreChange(SCORE_TABLE['boss']!);
+            ctx.onStageClear?.();
+          }
           break;
         }
 
@@ -76,9 +116,10 @@ export function processCollisions(world: World, ctx: CollisionContext): void {
         case 'player|bullet-enemy': {
           const bullet = a.type === 'bullet-enemy' ? a : b;
           world.kill(bullet);
+          world.emit({ type: 'player-hit' });
           const next = ctx.lives - 1;
           ctx.onLivesChange(next);
-          if (next <= 0) ctx.onGameOver();
+          if (next <= 0) { ctx.onGameOver(); world.emit({ type: 'game-over' }); }
           break;
         }
 
@@ -91,9 +132,10 @@ export function processCollisions(world: World, ctx: CollisionContext): void {
         case 'enemy-turret|player':
         case 'enemy-drone|player':
         case 'boss|player': {
+          world.emit({ type: 'player-hit' });
           const next = ctx.lives - 1;
           ctx.onLivesChange(next);
-          if (next <= 0) ctx.onGameOver();
+          if (next <= 0) { ctx.onGameOver(); world.emit({ type: 'game-over' }); }
           break;
         }
 
